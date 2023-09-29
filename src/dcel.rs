@@ -54,7 +54,7 @@ pub struct HalfEdge {
     origin: VertexId,
     target: VertexId,
 
-    twin: HalfEdgeId,
+    pub(crate) twin: HalfEdgeId, // TODO: make private
 
     pub next: HalfEdgeId, // TODO: make private
     prev: HalfEdgeId,
@@ -193,14 +193,14 @@ impl<VertexData> GeometricGraph<VertexData> {
         };
 
         let incoming_half_edge_idx = match second_vertex
-            .edges
+            .incoming_edges
             .iter()
-            .map(|&other| second_vertex.pos - self.vertex(self.half_edge(other).origin).pos)
+            .map(|&other| self.vertex(self.half_edge(other).origin).pos - second_vertex.pos)
             .collect::<Vec<Vec2>>()
             .binary_search_by(|other| {
                 other
                     .angle()
-                    .total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
+                    .total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
             }) {
             Ok(idx) => idx,
             Err(idx) => idx,
@@ -221,14 +221,14 @@ impl<VertexData> GeometricGraph<VertexData> {
         };
 
         let incoming_twin_idx = match first_vertex
-            .edges
+            .incoming_edges
             .iter()
-            .map(|&other| first_vertex.pos - self.vertex(self.half_edge(other).origin).pos)
+            .map(|&other| self.vertex(self.half_edge(other).origin).pos - first_vertex.pos)
             .collect::<Vec<Vec2>>()
             .binary_search_by(|other| {
                 other
                     .angle()
-                    .total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
+                    .total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
             }) {
             Ok(idx) => idx,
             Err(idx) => idx,
@@ -253,7 +253,6 @@ impl<VertexData> GeometricGraph<VertexData> {
                 .insert(incoming_twin_idx, half_twin_id);
         }
 
-        // TODO: didn't fix the calculation in this one yet. Should place the correct values
         // Fix the `next` of the new edges and of their previous edges
         {
             let first_vertex = self.vertex(first);
@@ -294,7 +293,6 @@ impl<VertexData> GeometricGraph<VertexData> {
             self.half_edge_mut(half_edge_id).prev = prev_id;
             self.half_edge_mut(half_twin_id).prev = twin_prev_id;
         }
-        // TODO: set the `next` of the half edges correctly
         // TODO: set the face correctly
 
         full_edge_id
@@ -405,5 +403,11 @@ impl<VertexData> GeometricGraph<VertexData> {
 
     pub fn target(&self, edge: &Edge) -> &Vertex<VertexData> {
         self.vertex(edge.target)
+    }
+}
+
+impl<VertexData> Default for GeometricGraph<VertexData> {
+    fn default() -> Self {
+        Self::new()
     }
 }
