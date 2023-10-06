@@ -1,21 +1,13 @@
-use std::{
-    cmp::Ordering,
-    slice::{Iter, IterMut},
+use nannou::prelude::{Point2, Vec2Angle};
+use slotmap::{
+    basic::{Values, ValuesMut},
+    new_key_type, SlotMap,
 };
 
-use nannou::prelude::{Point2, Vec2, Vec2Angle};
-
-#[derive(Debug, Clone, Copy)]
-pub struct VertexId(usize);
-
-#[derive(Debug, Clone, Copy)]
-pub struct HalfEdgeId(pub(crate) usize);
-
-#[derive(Debug, Clone, Copy)]
-pub struct EdgeId(usize);
-
-#[derive(Debug, Clone, Copy)]
-pub struct FaceId(usize);
+new_key_type! {pub struct VertexId;}
+new_key_type! {pub struct HalfEdgeId;}
+new_key_type! {pub struct EdgeId;}
+new_key_type! {pub struct FaceId;}
 
 pub struct Vertex<Data> {
     id: VertexId,
@@ -41,13 +33,9 @@ impl<Data> Vertex<Data> {
     pub fn id(&self) -> VertexId {
         self.id
     }
-
-    fn compare_by_angle<OtherData>(&self, other: &Vertex<OtherData>) -> Ordering {
-        // TODO: implement WITHOUT calculating angle
-        self.pos.angle().total_cmp(&other.pos.angle())
-    }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct HalfEdge {
     id: HalfEdgeId,
 
@@ -85,6 +73,7 @@ impl HalfEdge {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Edge {
     id: EdgeId,
 
@@ -96,13 +85,19 @@ pub struct Edge {
 }
 
 impl Edge {
-    fn new(id: EdgeId, first: &HalfEdge, second: &HalfEdge) -> Self {
+    fn new(
+        id: EdgeId,
+        first: HalfEdgeId,
+        second: HalfEdgeId,
+        origin: VertexId,
+        target: VertexId,
+    ) -> Self {
         Self {
             id,
-            first: first.id,
-            second: second.id,
-            origin: first.origin,
-            target: first.target,
+            first,
+            second,
+            origin,
+            target,
         }
     }
 
@@ -130,169 +125,142 @@ impl Edge {
 struct Face {}
 
 pub struct GeometricGraph<VertexData> {
-    vertices: Vec<Vertex<VertexData>>,
-    half_edges: Vec<HalfEdge>,
-    edges: Vec<Edge>,
-    faces: Vec<Face>,
+    vertices: SlotMap<VertexId, Vertex<VertexData>>,
+    half_edges: SlotMap<HalfEdgeId, HalfEdge>,
+    edges: SlotMap<EdgeId, Edge>,
+    faces: SlotMap<FaceId, Face>,
 }
 
 impl<VertexData> GeometricGraph<VertexData> {
     pub fn new() -> GeometricGraph<VertexData> {
         Self {
-            vertices: Vec::new(),
-            half_edges: Vec::new(),
-            edges: Vec::new(),
-            faces: Vec::new(),
+            vertices: SlotMap::with_key(),
+            half_edges: SlotMap::with_key(),
+            edges: SlotMap::with_key(),
+            faces: SlotMap::with_key(),
         }
     }
 
     pub fn add_vertex(&mut self, pos: Point2, data: VertexData) -> VertexId {
-        let id = VertexId(self.vertices.len());
-        let vertex = Vertex::new(id, pos, data);
-
-        self.vertices.push(vertex);
-
-        id
+        self.vertices
+            .insert_with_key(|id| Vertex::new(id, pos, data))
     }
 
-    pub fn add_edge(&mut self, first: VertexId, second: VertexId) -> EdgeId {
-        let half_edge_id = HalfEdgeId(self.half_edges.len());
-        let half_twin_id = HalfEdgeId(self.half_edges.len() + 1);
-        let full_edge_id = EdgeId(self.edges.len());
+    pub fn add_edge(&mut self, origin: VertexId, target: VertexId) -> EdgeId {
+        // Add the new half-edges and the full edge to the structure
+        let edge_id = self
+            .half_edges
+            .insert_with_key(|edge_id| HalfEdge::new(edge_id, origin, target));
+        let twin_id = self
+            .half_edges
+            .insert_with_key(|twin_id| HalfEdge::new(twin_id, target, origin));
 
-        let mut half_edge = HalfEdge::new(half_edge_id, first, second);
-        let mut half_twin = HalfEdge::new(half_twin_id, second, first);
-        let full_edge = Edge::new(full_edge_id, &half_edge, &half_twin);
+        let full_edge_id = self.edges.insert_with_key(|full_edge_id| {
+            Edge::new(full_edge_id, edge_id, twin_id, origin, target)
+        });
 
         // Set the edges as twins of each other
-        half_edge.twin = half_twin_id;
-        half_twin.twin = half_edge_id;
-
-        // Add the edges to the structure
-        self.half_edges.push(half_edge);
-        self.half_edges.push(half_twin);
-        self.edges.push(full_edge);
+        self.half_edge_mut(edge_id).twin = twin_id;
+        self.half_edge_mut(twin_id).twin = edge_id;
 
         // Find the correct position of the first half-edge
+        let first_vertex = self.vertex(origin);
+        let second_vertex = self.vertex(target);
 
-        let first_vertex = self.vertex(first);
-        let second_vertex = self.vertex(second);
-
-        let half_edge_idx = match first_vertex
+        let half_edge_idx = first_vertex
             .edges
             .iter()
             .map(|&other| self.vertex(self.half_edge(other).target).pos - first_vertex.pos)
-            .collect::<Vec<Vec2>>()
+            .map(|vec| vec.angle())
+            .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other
-                    .angle()
-                    .total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
-            }) {
-            Ok(idx) => idx,
-            Err(idx) => idx,
-        };
+                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
+            })
+            .unwrap_or_else(|data| data);
 
-        let incoming_half_edge_idx = match second_vertex
+        let incoming_half_edge_idx = second_vertex
             .incoming_edges
             .iter()
             .map(|&other| self.vertex(self.half_edge(other).origin).pos - second_vertex.pos)
-            .collect::<Vec<Vec2>>()
+            .map(|vec| vec.angle())
+            .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other
-                    .angle()
-                    .total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
-            }) {
-            Ok(idx) => idx,
-            Err(idx) => idx,
-        };
+                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
+            })
+            .unwrap_or_else(|data| data);
 
-        let half_twin_idx = match second_vertex
+        let half_twin_idx = second_vertex
             .edges
             .iter()
             .map(|&other| self.vertex(self.half_edge(other).target).pos - second_vertex.pos)
-            .collect::<Vec<Vec2>>()
+            .map(|vec| vec.angle())
+            .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other
-                    .angle()
-                    .total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
-            }) {
-            Ok(idx) => idx,
-            Err(idx) => idx,
-        };
+                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
+            })
+            .unwrap_or_else(|data| data);
 
-        let incoming_twin_idx = match first_vertex
+        let incoming_twin_idx = first_vertex
             .incoming_edges
             .iter()
             .map(|&other| self.vertex(self.half_edge(other).origin).pos - first_vertex.pos)
-            .collect::<Vec<Vec2>>()
+            .map(|vec| vec.angle())
+            .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other
-                    .angle()
-                    .total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
-            }) {
-            Ok(idx) => idx,
-            Err(idx) => idx,
-        };
+                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
+            })
+            .unwrap_or_else(|data| data);
 
         // Insert the half-edges into the edge lists in the vertices
-        {
-            self.vertex_mut(first)
-                .edges
-                .insert(half_edge_idx, half_edge_id);
+        self.vertex_mut(origin).edges.insert(half_edge_idx, edge_id);
 
-            self.vertex_mut(second)
-                .edges
-                .insert(half_twin_idx, half_twin_id);
+        self.vertex_mut(target).edges.insert(half_twin_idx, twin_id);
 
-            self.vertex_mut(second)
-                .incoming_edges
-                .insert(incoming_half_edge_idx, half_edge_id);
+        self.vertex_mut(target)
+            .incoming_edges
+            .insert(incoming_half_edge_idx, edge_id);
 
-            self.vertex_mut(first)
-                .incoming_edges
-                .insert(incoming_twin_idx, half_twin_id);
-        }
+        self.vertex_mut(origin)
+            .incoming_edges
+            .insert(incoming_twin_idx, twin_id);
 
         // Fix the `next` of the new edges and of their previous edges
-        {
-            let first_vertex = self.vertex(first);
-            let second_vertex = self.vertex(second);
-            // Find the `next` of the current edges
-            let next_idx = (half_twin_idx + 1) % second_vertex.edges.len();
-            let twin_next_idx = (half_edge_idx + 1) % first_vertex.edges.len();
+        let first_vertex = self.vertex(origin);
+        let second_vertex = self.vertex(target);
+        // Find the `next` of the current edges
+        let next_idx = (half_twin_idx + 1) % second_vertex.edges.len();
+        let twin_next_idx = (half_edge_idx + 1) % first_vertex.edges.len();
 
-            // Safety: an item was inserted into the vec previously, and the idx is guaranteed to be in bounds.
-            let next_id = *second_vertex.edges.get(next_idx).unwrap();
-            let twin_next_id = *first_vertex.edges.get(twin_next_idx).unwrap();
+        // Safety: an item was inserted into the vec previously, and the idx is guaranteed to be in bounds.
+        let next_id = *second_vertex.edges.get(next_idx).unwrap();
+        let twin_next_id = *first_vertex.edges.get(twin_next_idx).unwrap();
 
-            // Find the `prev` of the current edges
-            let prev_idx = (incoming_twin_idx + first_vertex.incoming_edges.len() - 1)
-                % first_vertex.incoming_edges.len();
-            let twin_prev_idx = (incoming_half_edge_idx + second_vertex.incoming_edges.len() - 1)
-                % second_vertex.incoming_edges.len();
+        // Find the `prev` of the current edges
+        let prev_idx = (incoming_twin_idx + first_vertex.incoming_edges.len() - 1)
+            % first_vertex.incoming_edges.len();
+        let twin_prev_idx = (incoming_half_edge_idx + second_vertex.incoming_edges.len() - 1)
+            % second_vertex.incoming_edges.len();
 
-            // Safety: an item was inserted into the vec previously, and the idx is guaranteed to be in bounds.
-            let prev_id = *first_vertex.incoming_edges.get(prev_idx).unwrap();
-            let twin_prev_id = *second_vertex.incoming_edges.get(twin_prev_idx).unwrap();
+        // Safety: an item was inserted into the vec previously, and the idx is guaranteed to be in bounds.
+        let prev_id = *first_vertex.incoming_edges.get(prev_idx).unwrap();
+        let twin_prev_id = *second_vertex.incoming_edges.get(twin_prev_idx).unwrap();
 
-            println!("\nAdding edge:\nid:{half_edge_id:?}\ntwin_id:{half_twin_id:?}\nnext:{next_id:?}\ntwin_next:{twin_next_id:?}\nprev:{prev_id:?}\ntwin_prev:{twin_prev_id:?}");
+        // Set the `next` of the previous edges
+        self.half_edge_mut(prev_id).next = edge_id;
+        self.half_edge_mut(twin_prev_id).next = twin_id;
 
-            // Set the `next` of the previous edges
-            self.half_edge_mut(prev_id).next = half_edge_id;
-            self.half_edge_mut(twin_prev_id).next = half_twin_id;
+        // Set the `prev` of the next edges
+        self.half_edge_mut(next_id).prev = edge_id;
+        self.half_edge_mut(twin_next_id).prev = twin_id;
 
-            // Set the `prev` of the next edges
-            self.half_edge_mut(next_id).prev = half_edge_id;
-            self.half_edge_mut(twin_next_id).prev = half_twin_id;
+        // Set the `next` of the new edges
+        self.half_edge_mut(edge_id).next = next_id;
+        self.half_edge_mut(twin_id).next = twin_next_id;
 
-            // Set the `next` of the new edges
-            self.half_edge_mut(half_edge_id).next = next_id;
-            self.half_edge_mut(half_twin_id).next = twin_next_id;
+        // Set the `prev` of the new edges
+        self.half_edge_mut(edge_id).prev = prev_id;
+        self.half_edge_mut(twin_id).prev = twin_prev_id;
 
-            // Set the `prev` of the new edges
-            self.half_edge_mut(half_edge_id).prev = prev_id;
-            self.half_edge_mut(half_twin_id).prev = twin_prev_id;
-        }
         // TODO: set the face correctly
 
         full_edge_id
@@ -369,32 +337,40 @@ impl<VertexData> GeometricGraph<VertexData> {
     //     edge_id
     // }
 
-    pub fn iter_vertices(&self) -> Iter<Vertex<VertexData>> {
-        self.vertices.iter()
+    pub fn iter_vertices(&self) -> Values<'_, VertexId, Vertex<VertexData>> {
+        self.vertices.values()
     }
 
-    pub fn iter_mut_vertices(&mut self) -> IterMut<Vertex<VertexData>> {
-        self.vertices.iter_mut()
+    pub fn iter_mut_vertices(&mut self) -> ValuesMut<'_, VertexId, Vertex<VertexData>> {
+        self.vertices.values_mut()
     }
 
-    pub fn iter_edges(&self) -> Iter<Edge> {
-        self.edges.iter()
+    pub fn iter_edges(&self) -> Values<'_, EdgeId, Edge> {
+        self.edges.values()
     }
 
     pub fn vertex(&self, vertex_id: VertexId) -> &Vertex<VertexData> {
-        self.vertices.get(vertex_id.0).unwrap()
+        self.vertices.get(vertex_id).unwrap()
     }
 
     pub fn vertex_mut(&mut self, vertex_id: VertexId) -> &mut Vertex<VertexData> {
-        self.vertices.get_mut(vertex_id.0).unwrap()
+        self.vertices.get_mut(vertex_id).unwrap()
     }
 
     pub fn half_edge(&self, edge_id: HalfEdgeId) -> &HalfEdge {
-        self.half_edges.get(edge_id.0).unwrap()
+        self.half_edges.get(edge_id).unwrap()
     }
 
     pub fn half_edge_mut(&mut self, edge_id: HalfEdgeId) -> &mut HalfEdge {
-        self.half_edges.get_mut(edge_id.0).unwrap()
+        self.half_edges.get_mut(edge_id).unwrap()
+    }
+
+    pub fn edge(&self, edge_id: EdgeId) -> &Edge {
+        self.edges.get(edge_id).unwrap()
+    }
+
+    pub fn edge_mut(&mut self, edge_id: EdgeId) -> &mut Edge {
+        self.edges.get_mut(edge_id).unwrap()
     }
 
     pub fn origin(&self, edge: &Edge) -> &Vertex<VertexData> {
