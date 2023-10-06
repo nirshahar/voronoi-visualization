@@ -1988,6 +1988,7 @@ name = "voronoi-nannou"
 version = "0.1.0"
 dependencies = [
  "nannou",
+ "slotmap",
 ]
 
 [[package]]
