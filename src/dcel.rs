@@ -266,76 +266,41 @@ impl<VertexData> GeometricGraph<VertexData> {
         full_edge_id
     }
 
-    // fn add_half_edge(&mut self, origin: VertexId, target: VertexId) -> HalfEdgeId {
-    //     let edge_id = HalfEdgeId(self.half_edges.len());
+    pub fn remove_edge(&mut self, full_edge_id: EdgeId) {
+        let full_edge = *self.edge(full_edge_id);
 
-    //     let mut edge = HalfEdge::new(edge_id, origin, target);
+        // Find all `next` and `prev` of the appropriate half-edges
+        let edge = self.half_edge(full_edge.first);
+        let edge_id = edge.id;
+        let edge_next = edge.next;
+        let edge_prev = edge.prev;
 
-    //     self.half_edges.push(edge);
+        let twin_edge = self.half_edge(full_edge.second);
+        let twin_id = twin_edge.id;
+        let twin_next = twin_edge.next;
+        let twin_prev = twin_edge.prev;
 
-    //     // Find the correct position of the edge
+        // Fix the `next` and `prev`
+        self.half_edge_mut(edge_prev).next = twin_next;
+        self.half_edge_mut(edge_next).prev = twin_prev;
 
-    //     let origin_vertex = self.vertex(origin);
-    //     let target_vertex = self.vertex(target);
+        self.half_edge_mut(twin_prev).next = edge_next;
+        self.half_edge_mut(twin_next).prev = edge_prev;
 
-    //     let edge_idx = match origin_vertex
-    //         .edges
-    //         .iter()
-    //         .map(|&other| self.vertex(self.half_edge(other).target).pos - origin_vertex.pos)
-    //         .collect::<Vec<Vec2>>()
-    //         .binary_search_by(|other| {
-    //             other
-    //                 .angle()
-    //                 .total_cmp(&(target_vertex.pos - origin_vertex.pos).angle())
-    //         }) {
-    //         Ok(idx) => idx,
-    //         Err(idx) => idx,
-    //     };
+        // Remove the half-edges from the outgoing and incoming edges to the vertices
+        let first_vertex = self.vertex_mut(full_edge.origin);
+        first_vertex.edges.retain(|&id| id != edge_id);
+        first_vertex.incoming_edges.retain(|&id| id != twin_id);
 
-    //     let twin_idx = match target_vertex
-    //         .edges
-    //         .iter()
-    //         .map(|&other| self.vertex(self.half_edge(other).target).pos - target_vertex.pos)
-    //         .collect::<Vec<Vec2>>()
-    //         .binary_search_by(|other| {
-    //             other
-    //                 .angle()
-    //                 .total_cmp(&(origin_vertex.pos - target_vertex.pos).angle())
-    //         }) {
-    //         Ok(idx) => idx,
-    //         Err(idx) => idx,
-    //     };
+        let second_vertex = self.vertex_mut(full_edge.target);
+        second_vertex.edges.retain(|&id| id != twin_id);
+        second_vertex.incoming_edges.retain(|&id| id != edge_id);
 
-    //     let next_idx = (twin_idx + 1) % target_vertex.edges.len(); // TODO: ERROR what to do when there is NO next?
-
-    //     // Insert the half-edges into the outgoing edge lists in the vertices
-    //     self.vertex_mut(origin).edges.insert(edge_idx, edge_id);
-
-    //     // Fix the `next` of the new edge and of the previous edge
-    //     {
-    //         // Find the `next` of the current edges
-    //         let target_edges = &self.vertex(target).edges;
-
-    //         // Safety: an item was inserted into the vec previously, and the idx is guaranteed to be in bounds.
-    //         let next_id = *target_edges.get(next_idx).unwrap();
-
-    //         let prev_id = self.half_edge(next_id).prev;
-
-    //         println!("\nAdding edge:\nid:{edge_id:?}\nnext:{next_id:?}\nprev:{prev_id:?}");
-
-    //         // Fix the previous and next edges
-    //         self.half_edge_mut(prev_id).next = edge_id;
-    //         self.half_edge_mut(next_id).prev = edge_id;
-
-    //         // Set the `next` and `prev` of the new edge
-    //         self.half_edge_mut(edge_id).next = next_id;
-    //         self.half_edge_mut(edge_id).prev = prev_id;
-    //     }
-    //     // TODO: set the `next` of the half edges correctly
-    //     // TODO: set the face correctly
-
-    //     edge_id
-    // }
+        // Finally, remove the half-edges and the full-edge from the struct
+        self.half_edges.remove(full_edge.first);
+        self.half_edges.remove(full_edge.second);
+        self.edges.remove(full_edge.id);
+    }
 
     pub fn iter_vertices(&self) -> Values<'_, VertexId, Vertex<VertexData>> {
         self.vertices.values()
