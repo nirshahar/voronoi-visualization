@@ -2,11 +2,11 @@ pub mod dcel;
 pub mod lines;
 mod randwalk;
 
-use dcel::{GeometricGraph, HalfEdgeId, Vertex};
+use dcel::GeometricGraph;
+use dcel::HalfEdgeId;
 use nannou::{
     prelude::*,
     rand::{thread_rng, Rng},
-    winit::event::WindowEvent,
 };
 use randwalk::MultiOscillator;
 
@@ -15,8 +15,9 @@ const DEBUG_EDGE_LENGTH: f32 = 0.9f32;
 
 struct Model {
     graph: GeometricGraph<VertexData>,
-    i: usize,
     edge: HalfEdgeId,
+    i: usize,       // TODO: remove
+    was_twin: bool, // TODO: remove
 }
 
 struct VertexData {
@@ -39,19 +40,19 @@ fn create_default_example_graph() -> GeometricGraph<VertexData> {
     let mut rng = thread_rng();
 
     let a = this.add_vertex(
-        Point2::default(),
+        Point2::new(-50f32, -50f32),
         VertexData::rand_new(Point2::new(-50f32, -50f32), &mut rng),
     );
     let b = this.add_vertex(
-        Point2::default(),
+        Point2::new(50f32, -50f32),
         VertexData::rand_new(Point2::new(50f32, -50f32), &mut rng),
     );
     let c = this.add_vertex(
-        Point2::default(),
+        Point2::new(50f32, 50f32),
         VertexData::rand_new(Point2::new(50f32, 50f32), &mut rng),
     );
     let d = this.add_vertex(
-        Point2::default(),
+        Point2::new(-50f32, 50f32),
         VertexData::rand_new(Point2::new(-50f32, 50f32), &mut rng),
     );
 
@@ -68,7 +69,7 @@ impl Model {
         let time = update.since_start.as_secs_f32();
 
         for vertex in self.graph.iter_mut_vertices() {
-            vertex.pos = vertex.data.original_position + vertex.data.noise.generate(time);
+            vertex.pos = vertex.data.original_position; //+ vertex.data.noise.generate(time);
         }
     }
 
@@ -124,10 +125,13 @@ fn event(app: &App, model: &mut Model, event: Event) {
 }
 
 fn model(_: &App) -> Model {
+    let graph = create_default_example_graph();
+    let edge = graph.iter_edges().next().unwrap().half_edge();
     Model {
-        graph: create_default_example_graph(),
+        graph,
         i: 0,
-        edge: HalfEdgeId(0),
+        edge,
+        was_twin: false,
     }
 }
 
@@ -135,10 +139,20 @@ fn update(app: &App, model: &mut Model, update: Update) {
     model.update(app, update);
 
     model.i += 1;
-    if model.i % 100 == 0 {
-        if model.graph.iter_edges().count() > 0 {
+    if model.i % 100 == 0 && model.graph.iter_edges().count() > 0 {
+        if model.was_twin || model.i % 7 != 0 {
             model.edge = model.graph.half_edge(model.edge).next;
+        } else {
+            model.edge = model.graph.half_edge(model.edge).twin;
         }
+
+        model.was_twin = !model.was_twin;
+    }
+
+    if model.i % 1234 == 0 {
+        model
+            .graph
+            .remove_edge(model.graph.iter_edges().next().unwrap().id());
     }
 }
 
@@ -181,7 +195,7 @@ fn debug_draw(draw: &Draw, model: &Model) {
                         - normal * DEBUG_HALF_EDGE_OFFSET,
                 );
 
-            if model.edge.0 == edge.id().0 {
+            if model.edge == edge.id() {
                 arrow = arrow.color(RED);
             }
 
