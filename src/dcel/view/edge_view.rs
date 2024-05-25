@@ -1,11 +1,11 @@
 use std::ops::Deref;
 
 use crate::dcel::{
-    graph::GeometricGraph,
     edge::{Edge, EdgeId},
+    graph::GeometricGraph,
 };
 
-use super::half_edge_view::HalfEdgeView;
+use super::{half_edge_view::HalfEdgeView, vertex_view::VertexView};
 
 pub struct EdgeView<'a, V> {
     graph: &'a GeometricGraph<V>,
@@ -23,45 +23,55 @@ impl<V> GeometricGraph<V> {
 
 impl<'a, V> EdgeView<'a, V> {
     pub fn half_edge(&self) -> HalfEdgeView<V> {
-        self.graph
-            .view_half_edge(self.graph.edge(self.edge).half_edge())
+        self.graph.view_half_edge(self.graph.edge(self.edge).first)
     }
 
     pub fn twin_edge(&self) -> HalfEdgeView<V> {
-        self.graph
-            .view_half_edge(self.graph.edge(self.edge).twin_half_edge())
+        self.graph.view_half_edge(self.graph.edge(self.edge).second)
     }
 
     pub fn next(&self) -> EdgeView<V> {
-        let edge = self.graph.edge(self.edge).next();
-        EdgeView {
-            graph: self.graph,
-            edge,
-        }
+        todo!();
+        // let edge = self.graph.edge(self.edge).next();
+        // EdgeView {
+        //     graph: self.graph,
+        //     edge,
+        // }
     }
 
     pub fn prev(&self) -> EdgeView<V> {
-        let edge = self.graph.edge(self.edge).prev();
-        EdgeView {
-            graph: self.graph,
-            edge,
-        }
+        todo!();
+        // let edge = self.graph.edge(self.edge).prev();
+        // EdgeView {
+        //     graph: self.graph,
+        //     edge,
+        // }
     }
 
     pub fn twin_next(&self) -> EdgeView<V> {
-        let edge = self.graph.edge(self.edge).twin_next();
-        EdgeView {
-            graph: self.graph,
-            edge,
-        }
+        todo!();
+        // let edge = self.graph.edge(self.edge).twin_next();
+        // EdgeView {
+        //     graph: self.graph,
+        //     edge,
+        // }
     }
 
     pub fn twin_prev(&self) -> EdgeView<V> {
-        let edge = self.graph.edge(self.edge).twin_prev();
-        EdgeView {
-            graph: self.graph,
-            edge,
-        }
+        todo!();
+        // let edge = self.graph.edge(self.edge).twin_prev();
+        // EdgeView {
+        //     graph: self.graph,
+        //     edge,
+        // }
+    }
+
+    pub fn origin(&self) -> VertexView<V> {
+        self.graph.view_vertex(self.origin)
+    }
+
+    pub fn target(&self) -> VertexView<V> {
+        self.graph.view_vertex(self.target)
     }
 
     pub fn id(&self) -> EdgeId {
