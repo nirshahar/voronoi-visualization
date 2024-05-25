@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 nannou = "0.18.1"
+rand = "0.8.5"
 slotmap = "1.0.6"

@@ -1,20 +1,28 @@
 pub mod dcel;
+pub mod deluanay;
 pub mod lines;
 mod randwalk;
 
-use dcel::GeometricGraph;
-use dcel::HalfEdgeId;
+use dcel::edge::Edge;
+use dcel::edge::EdgeId;
+use dcel::graph::GeometricGraph;
+use dcel::half_edge::HalfEdgeId;
+
+use deluanay::IntoDeluanay;
+use deluanay::Triangulable;
+use deluanay::Triangulated;
 use nannou::{
     prelude::*,
     rand::{thread_rng, Rng},
 };
+use rand::prelude::*;
 use randwalk::MultiOscillator;
 
 const DEBUG_HALF_EDGE_OFFSET: f32 = 3.0f32;
 const DEBUG_EDGE_LENGTH: f32 = 0.9f32;
 
 struct Model {
-    graph: GeometricGraph<VertexData>,
+    graph: Triangulated<GeometricGraph<VertexData>>,
     edge: HalfEdgeId,
     i: usize,       // TODO: remove
     was_twin: bool, // TODO: remove
@@ -103,24 +111,61 @@ impl Model {
 fn main() {
     nannou::app(model)
         .update(update)
-        .event(event)
+        .event(handle_events)
         .simple_window(view)
         .run();
 }
 
-fn event(app: &App, model: &mut Model, event: Event) {
+fn handle_events(app: &App, model: &mut Model, event: Event) {
+    event_left_click(app, model, &event);
+    event_right_click(model, &event);
+}
+
+fn event_right_click(model: &mut Model, event: &Event) {
+    if let Event::WindowEvent {
+        id: _,
+        simple: Some(MousePressed(MouseButton::Right)),
+    } = event
+    {
+        let edges: Vec<EdgeId> = model.graph.iter_edges().map(Edge::id).collect();
+        let &rand_edge = edges.choose(&mut thread_rng()).unwrap();
+
+        model.graph.flip_edge(rand_edge);
+    }
+}
+
+fn event_left_click(app: &App, model: &mut Model, event: &Event) {
     if let Event::WindowEvent {
         id: _,
         simple: Some(MousePressed(MouseButton::Left)),
     } = event
     {
         let pos = app.mouse.position();
-        let other = model.graph.iter_vertices().last().unwrap().id(); // TODO: temp
+
+        let mut min = [None; 2];
+        let mut min_dist = [f32::INFINITY; 2];
+        for v in model.graph.iter_vertices() {
+            let dist = v.pos.distance_squared(pos);
+            if dist < min_dist[0] {
+                min[1] = min[0];
+                min_dist[1] = min_dist[0];
+
+                min[0] = Some(v);
+                min_dist[0] = dist;
+            } else if dist < min_dist[1] {
+                min[1] = Some(v);
+                min_dist[1] = dist;
+            }
+        }
+        let first = min[0].unwrap().id();
+        let second = min[1].unwrap().id();
+
         let vertex = model
             .graph
             .add_vertex(pos, VertexData::rand_new(pos, &mut thread_rng()));
 
-        model.graph.add_edge(other, vertex); // TODO: temp
+        model.graph.add_edge(first, vertex); // TODO: temp
+        model.graph.add_edge(second, vertex); // TODO: temp
     }
 }
 
@@ -128,7 +173,7 @@ fn model(_: &App) -> Model {
     let graph = create_default_example_graph();
     let edge = graph.iter_edges().next().unwrap().half_edge();
     Model {
-        graph,
+        graph: graph.triangulate(),
         i: 0,
         edge,
         was_twin: false,
@@ -149,11 +194,11 @@ fn update(app: &App, model: &mut Model, update: Update) {
         model.was_twin = !model.was_twin;
     }
 
-    if model.i % 1234 == 0 {
-        model
-            .graph
-            .remove_edge(model.graph.iter_edges().next().unwrap().id());
-    }
+    // if model.i % 1234 == 0 {
+    // model
+    // .graph
+    // .remove_edge(model.graph.iter_edges().next().unwrap().id());
+    // }
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
