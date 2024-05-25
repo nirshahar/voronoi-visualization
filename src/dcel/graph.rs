@@ -1,128 +1,13 @@
-use nannou::prelude::{Point2, Vec2Angle};
+use nannou::{math::Vec2Angle, prelude::Point2};
 use slotmap::{
     basic::{Values, ValuesMut},
-    new_key_type, SlotMap,
+    SlotMap,
 };
 
-new_key_type! {pub struct VertexId;}
-new_key_type! {pub struct HalfEdgeId;}
-new_key_type! {pub struct EdgeId;}
-new_key_type! {pub struct FaceId;}
-
-pub struct Vertex<Data> {
-    id: VertexId,
-
-    pub pos: Point2,
-    edges: Vec<HalfEdgeId>,
-    incoming_edges: Vec<HalfEdgeId>,
-
-    pub data: Data,
-}
-
-impl<Data> Vertex<Data> {
-    fn new(id: VertexId, pos: Point2, data: Data) -> Self {
-        Self {
-            id,
-            pos,
-            edges: Vec::new(),
-            incoming_edges: Vec::new(),
-            data,
-        }
-    }
-
-    pub fn id(&self) -> VertexId {
-        self.id
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct HalfEdge {
-    id: HalfEdgeId,
-
-    origin: VertexId,
-    target: VertexId,
-
-    pub(crate) twin: HalfEdgeId, // TODO: make private
-
-    pub next: HalfEdgeId, // TODO: make private
-    prev: HalfEdgeId,
-}
-
-impl HalfEdge {
-    fn new(id: HalfEdgeId, origin: VertexId, target: VertexId) -> Self {
-        Self {
-            id,
-            origin,
-            target,
-            twin: id,
-            next: id,
-            prev: id,
-        }
-    }
-
-    pub fn id(&self) -> HalfEdgeId {
-        self.id
-    }
-
-    pub fn origin(&self) -> VertexId {
-        self.origin
-    }
-
-    pub fn target(&self) -> VertexId {
-        self.target
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Edge {
-    id: EdgeId,
-
-    first: HalfEdgeId,
-    second: HalfEdgeId,
-
-    origin: VertexId,
-    target: VertexId,
-}
-
-impl Edge {
-    fn new(
-        id: EdgeId,
-        first: HalfEdgeId,
-        second: HalfEdgeId,
-        origin: VertexId,
-        target: VertexId,
-    ) -> Self {
-        Self {
-            id,
-            first,
-            second,
-            origin,
-            target,
-        }
-    }
-
-    pub fn id(&self) -> EdgeId {
-        self.id
-    }
-
-    pub fn origin(&self) -> VertexId {
-        self.origin
-    }
-
-    pub fn target(&self) -> VertexId {
-        self.target
-    }
-
-    pub fn half_edge(&self) -> HalfEdgeId {
-        self.first
-    }
-
-    pub fn twin_half_edge(&self) -> HalfEdgeId {
-        self.second
-    }
-}
-
-struct Face {}
+use super::edge::*;
+use super::face::*;
+use super::half_edge::*;
+use super::vertex::*;
 
 pub struct GeometricGraph<VertexData> {
     vertices: SlotMap<VertexId, Vertex<VertexData>>,
@@ -300,6 +185,8 @@ impl<VertexData> GeometricGraph<VertexData> {
         self.half_edges.remove(full_edge.first);
         self.half_edges.remove(full_edge.second);
         self.edges.remove(full_edge.id);
+
+        // TODO: update the faces correctly
     }
 
     pub fn iter_vertices(&self) -> Values<'_, VertexId, Vertex<VertexData>> {
