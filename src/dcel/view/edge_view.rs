@@ -31,39 +31,21 @@ impl<'a, V> EdgeView<'a, V> {
     }
 
     pub fn next(&self) -> EdgeView<V> {
-        todo!();
-        // let edge = self.graph.edge(self.edge).next();
-        // EdgeView {
-        //     graph: self.graph,
-        //     edge,
-        // }
+        self.graph.view_edge(self.half_edge().next().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
     pub fn prev(&self) -> EdgeView<V> {
-        todo!();
-        // let edge = self.graph.edge(self.edge).prev();
-        // EdgeView {
-        //     graph: self.graph,
-        //     edge,
-        // }
+        self.graph.view_edge(self.half_edge().prev().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
     pub fn twin_next(&self) -> EdgeView<V> {
-        todo!();
-        // let edge = self.graph.edge(self.edge).twin_next();
-        // EdgeView {
-        //     graph: self.graph,
-        //     edge,
-        // }
+        self.graph
+            .view_edge(self.half_edge().twin().next().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
     pub fn twin_prev(&self) -> EdgeView<V> {
-        todo!();
-        // let edge = self.graph.edge(self.edge).twin_prev();
-        // EdgeView {
-        //     graph: self.graph,
-        //     edge,
-        // }
+        self.graph
+            .view_edge(self.half_edge().twin().prev().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
     pub fn origin(&self) -> VertexView<V> {

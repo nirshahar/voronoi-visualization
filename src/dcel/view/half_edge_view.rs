@@ -5,6 +5,8 @@ use crate::dcel::{
     half_edge::{HalfEdge, HalfEdgeId},
 };
 
+use super::edge_view::EdgeView;
+
 pub struct HalfEdgeView<'a, V> {
     graph: &'a GeometricGraph<V>,
     half_edge: HalfEdgeId,
@@ -42,6 +44,11 @@ impl<'a, V> HalfEdgeView<'a, V> {
             graph: self.graph,
             half_edge,
         }
+    }
+
+    pub fn full_edge(&self) -> EdgeView<V> {
+        let full_edge_id = self.graph.half_edge(self.half_edge).full_edge();
+        self.graph.view_edge(full_edge_id)
     }
 
     pub fn id(&self) -> HalfEdgeId {

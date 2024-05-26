@@ -44,10 +44,6 @@ impl<VertexData> GeometricGraph<VertexData> {
             Edge::new(full_edge_id, edge_id, twin_id, origin, target)
         });
 
-        // Set the edges as twins of each other
-        self.half_edge_mut(edge_id).twin = twin_id;
-        self.half_edge_mut(twin_id).twin = edge_id;
-
         // Find the correct position of the first half-edge
         let first_vertex = self.vertex(origin);
         let second_vertex = self.vertex(target);
@@ -98,13 +94,11 @@ impl<VertexData> GeometricGraph<VertexData> {
 
         // Insert the half-edges into the edge lists in the vertices
         self.vertex_mut(origin).edges.insert(half_edge_idx, edge_id);
-
         self.vertex_mut(target).edges.insert(half_twin_idx, twin_id);
 
         self.vertex_mut(target)
             .incoming_edges
             .insert(incoming_half_edge_idx, edge_id);
-
         self.vertex_mut(origin)
             .incoming_edges
             .insert(incoming_twin_idx, twin_id);
@@ -130,6 +124,12 @@ impl<VertexData> GeometricGraph<VertexData> {
         let prev_id = *first_vertex.incoming_edges.get(prev_idx).unwrap();
         let twin_prev_id = *second_vertex.incoming_edges.get(twin_prev_idx).unwrap();
 
+        // Finish initializing the half-edges, putting in them the final non-temporary values
+        self.half_edge_mut(edge_id)
+            .init(full_edge_id, twin_id, next_id, prev_id);
+        self.half_edge_mut(twin_id)
+            .init(full_edge_id, edge_id, twin_next_id, twin_prev_id);
+
         // Set the `next` of the previous edges
         self.half_edge_mut(prev_id).next = edge_id;
         self.half_edge_mut(twin_prev_id).next = twin_id;
@@ -137,14 +137,6 @@ impl<VertexData> GeometricGraph<VertexData> {
         // Set the `prev` of the next edges
         self.half_edge_mut(next_id).prev = edge_id;
         self.half_edge_mut(twin_next_id).prev = twin_id;
-
-        // Set the `next` of the new edges
-        self.half_edge_mut(edge_id).next = next_id;
-        self.half_edge_mut(twin_id).next = twin_next_id;
-
-        // Set the `prev` of the new edges
-        self.half_edge_mut(edge_id).prev = prev_id;
-        self.half_edge_mut(twin_id).prev = twin_prev_id;
 
         // TODO: set the face correctly
 

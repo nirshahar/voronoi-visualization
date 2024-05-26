@@ -35,36 +35,4 @@ impl Edge {
     pub fn id(&self) -> EdgeId {
         self.id
     }
-
-    pub fn origin(&self) -> VertexId {
-        self.origin
-    }
-
-    pub fn target(&self) -> VertexId {
-        self.target
-    }
-
-    pub fn half_edge(&self) -> HalfEdgeId {
-        self.first
-    }
-
-    pub fn twin_half_edge(&self) -> HalfEdgeId {
-        self.second
-    }
-
-    pub(crate) fn next(&self) -> EdgeId {
-        todo!()
-    }
-
-    pub(crate) fn prev(&self) -> EdgeId {
-        todo!()
-    }
-
-    pub(crate) fn twin_next(&self) -> EdgeId {
-        todo!()
-    }
-
-    pub(crate) fn twin_prev(&self) -> EdgeId {
-        todo!()
-    }
 }
