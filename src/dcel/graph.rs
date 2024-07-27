@@ -51,44 +51,44 @@ impl<VertexData> GeometricGraph<VertexData> {
         let half_edge_idx = first_vertex
             .edges
             .iter()
-            .map(|&other| self.vertex(self.half_edge(other).target).pos - first_vertex.pos)
+            .map(|&other| first_vertex.pos - self.vertex(self.half_edge(other).target).pos)
             .map(|vec| vec.angle())
             .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
+                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
             })
             .unwrap_or_else(|data| data);
 
         let incoming_half_edge_idx = second_vertex
             .incoming_edges
             .iter()
-            .map(|&other| self.vertex(self.half_edge(other).origin).pos - second_vertex.pos)
+            .map(|&other| second_vertex.pos - self.vertex(self.half_edge(other).origin).pos)
             .map(|vec| vec.angle())
             .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
+                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
             })
             .unwrap_or_else(|data| data);
 
         let half_twin_idx = second_vertex
             .edges
             .iter()
-            .map(|&other| self.vertex(self.half_edge(other).target).pos - second_vertex.pos)
+            .map(|&other| second_vertex.pos - self.vertex(self.half_edge(other).target).pos)
             .map(|vec| vec.angle())
             .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
+                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
             })
             .unwrap_or_else(|data| data);
 
         let incoming_twin_idx = first_vertex
             .incoming_edges
             .iter()
-            .map(|&other| self.vertex(self.half_edge(other).origin).pos - first_vertex.pos)
+            .map(|&other| first_vertex.pos - self.vertex(self.half_edge(other).origin).pos)
             .map(|vec| vec.angle())
             .collect::<Vec<f32>>()
             .binary_search_by(|other| {
-                other.total_cmp(&(second_vertex.pos - first_vertex.pos).angle())
+                other.total_cmp(&(first_vertex.pos - second_vertex.pos).angle())
             })
             .unwrap_or_else(|data| data);
 
@@ -181,6 +181,15 @@ impl<VertexData> GeometricGraph<VertexData> {
         // TODO: update the faces correctly
     }
 
+    pub fn remove_all_edges(&mut self) {
+        self.edges.clear();
+        self.half_edges.clear();
+
+        for (_, vertex) in self.vertices.iter_mut() {
+            vertex.clear_edges();
+        }
+    }
+
     pub fn iter_vertices(&self) -> Values<'_, VertexId, Vertex<VertexData>> {
         self.vertices.values()
     }
@@ -223,6 +232,18 @@ impl<VertexData> GeometricGraph<VertexData> {
 
     pub fn target(&self, edge: &Edge) -> &Vertex<VertexData> {
         self.vertex(edge.target)
+    }
+
+    pub fn num_vertices(&self) -> usize {
+        self.vertices.len()
+    }
+
+    pub fn num_edges(&self) -> usize {
+        self.edges.len()
+    }
+
+    pub fn num_faces(&self) -> usize {
+        self.faces.len()
     }
 }
 

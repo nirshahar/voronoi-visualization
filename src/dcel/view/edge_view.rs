@@ -1,4 +1,5 @@
-use std::ops::Deref;
+
+use impl_tools::autoimpl;
 
 use crate::dcel::{
     edge::{Edge, EdgeId},
@@ -7,6 +8,7 @@ use crate::dcel::{
 
 use super::{half_edge_view::HalfEdgeView, vertex_view::VertexView};
 
+#[autoimpl(Copy, Clone)]
 pub struct EdgeView<'a, V> {
     graph: &'a GeometricGraph<V>,
     edge: EdgeId,
@@ -22,49 +24,45 @@ impl<V> GeometricGraph<V> {
 }
 
 impl<'a, V> EdgeView<'a, V> {
-    pub fn half_edge(&self) -> HalfEdgeView<V> {
+    pub fn half_edge(self) -> HalfEdgeView<'a, V> {
         self.graph.view_half_edge(self.graph.edge(self.edge).first)
     }
 
-    pub fn twin_edge(&self) -> HalfEdgeView<V> {
+    pub fn twin_edge(self) -> HalfEdgeView<'a, V> {
         self.graph.view_half_edge(self.graph.edge(self.edge).second)
     }
 
-    pub fn next(&self) -> EdgeView<V> {
-        self.graph.view_edge(self.half_edge().next().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
+    pub fn next(self) -> EdgeView<'a, V> {
+        self.graph.view_edge(self.half_edge().next().full_edge().inner().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
-    pub fn prev(&self) -> EdgeView<V> {
-        self.graph.view_edge(self.half_edge().prev().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
+    pub fn prev(self) -> EdgeView<'a, V> {
+        self.graph.view_edge(self.half_edge().prev().full_edge().inner().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
-    pub fn twin_next(&self) -> EdgeView<V> {
+    pub fn twin_next(self) -> EdgeView<'a, V> {
         self.graph
-            .view_edge(self.half_edge().twin().next().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
+            .view_edge(self.half_edge().twin().next().full_edge().inner().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
-    pub fn twin_prev(&self) -> EdgeView<V> {
+    pub fn twin_prev(self) -> EdgeView<'a, V> {
         self.graph
-            .view_edge(self.half_edge().twin().prev().full_edge().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
+            .view_edge(self.half_edge().twin().prev().full_edge().inner().id) // TODO: why THE FUCK does it not accept it without doing a new `view_edge` on it
     }
 
-    pub fn origin(&self) -> VertexView<V> {
-        self.graph.view_vertex(self.origin)
+    pub fn origin(self) -> VertexView<'a, V> {
+        self.graph.view_vertex(self.inner().origin)
     }
 
-    pub fn target(&self) -> VertexView<V> {
-        self.graph.view_vertex(self.target)
+    pub fn target(self) -> VertexView<'a, V> {
+        self.graph.view_vertex(self.inner().target)
     }
 
     pub fn id(&self) -> EdgeId {
         self.edge
     }
-}
 
-impl<'a, V> Deref for EdgeView<'a, V> {
-    type Target = Edge;
-
-    fn deref(&self) -> &Self::Target {
+    fn inner(&self) -> &Edge {
         self.graph.edge(self.edge)
     }
 }

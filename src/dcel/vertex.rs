@@ -29,4 +29,9 @@ impl<Data> Vertex<Data> {
     pub fn id(&self) -> VertexId {
         self.id
     }
+
+    pub(super) fn clear_edges(&mut self) {
+        self.edges.clear();
+        self.incoming_edges.clear();
+    }
 }

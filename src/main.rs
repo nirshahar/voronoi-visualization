@@ -64,6 +64,14 @@ fn create_default_example_graph() -> GeometricGraph<VertexData> {
         VertexData::rand_new(Point2::new(-50f32, 50f32), &mut rng),
     );
 
+    for _ in 0..10 {
+        let point = Point2::new(
+            random_f32() * 500f32 - 250f32,
+            random_f32() * 500f32 - 250f32,
+        );
+        this.add_vertex(point, VertexData::rand_new(point, &mut rng));
+    }
+
     this.add_edge(a, b);
     this.add_edge(b, c);
     this.add_edge(c, d);
@@ -128,9 +136,17 @@ fn event_right_click(model: &mut Model, event: &Event) {
     } = event
     {
         let edges: Vec<EdgeId> = model.graph.iter_edges().map(Edge::id).collect();
-        let &rand_edge = edges.choose(&mut thread_rng()).unwrap();
+        let mut rand_edge = *edges.choose(&mut thread_rng()).unwrap();
+        let mut i = 0;
+        // TODO: this gets into an infinite loop because of a bug in the `edge_deluanay_condition` method
+        while model.graph.edge_deluanay_condition(rand_edge) && i < 1000 {
+            rand_edge = *edges.choose(&mut thread_rng()).unwrap();
+            i += 1;
+        }
 
-        model.graph.flip_edge(rand_edge);
+        if i < 1000 {
+            model.graph.flip_edge(rand_edge);
+        }
     }
 }
 
@@ -171,7 +187,11 @@ fn event_left_click(app: &App, model: &mut Model, event: &Event) {
 
 fn model(_: &App) -> Model {
     let graph = create_default_example_graph();
-    let edge = graph.iter_edges().next().unwrap().half_edge();
+    let edge = graph
+        .view_edge(graph.iter_edges().next().unwrap().id())
+        .half_edge()
+        .id();
+
     Model {
         graph: graph.triangulate(),
         i: 0,
@@ -182,23 +202,6 @@ fn model(_: &App) -> Model {
 
 fn update(app: &App, model: &mut Model, update: Update) {
     model.update(app, update);
-
-    model.i += 1;
-    if model.i % 100 == 0 && model.graph.iter_edges().count() > 0 {
-        if model.was_twin || model.i % 7 != 0 {
-            model.edge = model.graph.half_edge(model.edge).next;
-        } else {
-            model.edge = model.graph.half_edge(model.edge).twin;
-        }
-
-        model.was_twin = !model.was_twin;
-    }
-
-    // if model.i % 1234 == 0 {
-    // model
-    // .graph
-    // .remove_edge(model.graph.iter_edges().next().unwrap().id());
-    // }
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -206,10 +209,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     draw.background().color(rgb(100u8, 100u8, 100u8));
 
-    // model.draw_to(&draw);
-    debug_draw(&draw, model); // TODO: remove debug
+    model.draw_to(&draw);
 
-    draw.to_frame(app, &frame).unwrap();
+    draw.to_frame(app, &frame)
+        .expect("Nannou couldn't draw frame properly!");
 }
 
 fn debug_draw(draw: &Draw, model: &Model) {
@@ -217,10 +220,11 @@ fn debug_draw(draw: &Draw, model: &Model) {
 
     graph
         .iter_edges()
+        .map(|edge| graph.view_edge(edge.id()))
         .flat_map(|edge| {
             [
-                graph.half_edge(edge.half_edge()),
-                graph.half_edge(edge.twin_half_edge()),
+                graph.half_edge(edge.half_edge().id()),
+                graph.half_edge(edge.twin_edge().id()),
             ]
         })
         .for_each(|edge| {
@@ -228,17 +232,20 @@ fn debug_draw(draw: &Draw, model: &Model) {
             let target = graph.vertex(edge.target());
             let normal = (target.pos - origin.pos).perp().normalize();
 
-            let mut arrow = draw
-                .arrow()
-                .weight(2f32)
-                .start(
-                    (1f32 - DEBUG_EDGE_LENGTH) * target.pos + DEBUG_EDGE_LENGTH * origin.pos
-                        - normal * DEBUG_HALF_EDGE_OFFSET,
-                )
-                .end(
-                    DEBUG_EDGE_LENGTH * target.pos + (1f32 - DEBUG_EDGE_LENGTH) * origin.pos
-                        - normal * DEBUG_HALF_EDGE_OFFSET,
-                );
+            let arrow_start = (1f32 - DEBUG_EDGE_LENGTH) * target.pos
+                + DEBUG_EDGE_LENGTH * origin.pos
+                - normal * DEBUG_HALF_EDGE_OFFSET;
+            let arrow_end = DEBUG_EDGE_LENGTH * target.pos
+                + (1f32 - DEBUG_EDGE_LENGTH) * origin.pos
+                - normal * DEBUG_HALF_EDGE_OFFSET;
+
+            if !(arrow_start.is_finite() && arrow_end.is_finite()) {
+                let origin_pos = origin.pos;
+                let target_pos = target.pos;
+                panic!("Trying to draw invalid edge:\nstart at {arrow_start} end at {arrow_end}.\norigin at: {origin_pos} target at: {target_pos}");
+            }
+
+            let mut arrow = draw.arrow().weight(2f32).start(arrow_start).end(arrow_end);
 
             if model.edge == edge.id() {
                 arrow = arrow.color(RED);
